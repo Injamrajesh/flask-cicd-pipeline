@@ -17,18 +17,17 @@ pipeline {
 
         stage('Install Dependencies') {
             steps {
-                
-                    sh 'python3 -m pip install --break-system-packages -r requirements.txt'
-                
+                sh 'python3 -m pip install --break-system-packages -r requirements.txt'
             }
         }
 
         stage('Run Tests') {
             steps {
-               withCredentials([string(credentialsId: 'mongo-uri', variable: 'MONGO_URI')]) {
-            sh                 export MONGO_URI="$MONGO_URI"
-                python3 -m pytest -v
-            
+                withCredentials([string(credentialsId: 'mongo-uri', variable: 'MONGO_URI')]) {
+                    sh '''
+                        python3 -m pytest -v
+                    '''
+                }
             }
         }
 
