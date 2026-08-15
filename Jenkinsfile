@@ -66,11 +66,16 @@ pipeline {
             }
         }
 
-        stage('Deploy to EC2') {
-            steps {
-                echo 'EC2 deployment will be configured next.'
-            }
+        stage('Test EC2 SSH') {
+        steps {
+        sshagent(credentials: ['flask-practice-ec2-ssh']) {
+            sh '''
+                ssh -o StrictHostKeyChecking=no ec2-user@98.89.45.250 \
+                "echo SSH connection successful && hostname"
+            '''
         }
+    }
+}
     }
 
     post {
