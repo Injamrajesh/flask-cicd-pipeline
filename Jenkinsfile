@@ -3,6 +3,7 @@ pipeline {
 
     environment {
         AWS_REGION = 'us-east-1'
+        ECR_REGISTRY = '310297108115.dkr.ecr.us-east-1.amazonaws.com'
         ECR_REPO = '310297108115.dkr.ecr.us-east-1.amazonaws.com/flask-practice'
         IMAGE_TAG = "${env.GIT_COMMIT}"
     }
@@ -23,7 +24,12 @@ pipeline {
 
         stage('Run Tests') {
             steps {
-                withCredentials([string(credentialsId: 'MONGO_URI_RI', variable: 'MONGO_URI')]) {
+                withCredentials([
+                    string(
+                        credentialsId: 'MONGO_URI_RI',
+                        variable: 'MONGO_URI'
+                    )
+                ]) {
                     sh '''
                         python3 -m pytest -v
                     '''
@@ -39,10 +45,24 @@ pipeline {
 
         stage('Push Image to ECR') {
             steps {
-                sh '''
-                    aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REPO
-                    docker push $ECR_REPO:$IMAGE_TAG
-                '''
+                withCredentials([
+                    [$class: 'AmazonWebServicesCredentialsBinding',
+                     credentialsId: 'aws-ecr-credentials']
+                ]) {
+                    sh '''
+                        set -e
+
+                        echo "Checking AWS credentials..."
+                        aws sts get-caller-identity
+
+                        echo "Logging in to ECR..."
+                        aws ecr get-login-password --region "$AWS_REGION" | \
+                            docker login --username AWS --password-stdin "$ECR_REGISTRY"
+
+                        echo "Pushing Docker image..."
+                        docker push "$ECR_REPO:$IMAGE_TAG"
+                    '''
+                }
             }
         }
 
