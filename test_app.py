@@ -1,63 +1,115 @@
 import pytest
 from app import app, mongo
-from bson.objectid import ObjectId
+
 
 @pytest.fixture
 def client():
     app.config["TESTING"] = True
-    app.config["MONGO_URI"] = "mongodb://localhost:27017/test_student_db"  # test DB
+
     client = app.test_client()
 
-    # Setup: clear and create test data
+    # Clear test collection before each test
     with app.app_context():
         mongo.db.students.delete_many({})
+
+    yield client
+
+    # Clean up test data
+    with app.app_context():
+        mongo.db.students.delete_many({})
+
+
+def test_health(client):
+    """Health endpoint should return HTTP 200."""
+    response = client.get("/health")
+    assert response.status_code == 200
+    assert response.json["status"] == "healthy"
+
+
+def test_home_page(client):
+    """Test if home page loads correctly."""
+    with app.app_context():
         mongo.db.students.insert_one({
-            "_id": ObjectId("66fddff25f4b5f6a0a123456"),
             "name": "Test Student",
             "email": "test@student.com",
             "course": "Flask"
         })
-    yield client
 
-    # Teardown: drop DB after test
-    with app.app_context():
-        mongo.cx.drop_database("test_student_db")
+    response = client.get("/")
 
-
-def test_home_page(client):
-    """Test if home page loads correctly"""
-    response = client.get('/')
     assert response.status_code == 200
     assert b"Test Student" in response.data
 
 
 def test_add_student(client):
-    """Test adding a new student"""
-    data = {"name": "New User", "email": "new@user.com", "course": "Python"}
-    response = client.post('/add', data=data, follow_redirects=True)
+    """Test adding a new student."""
+    data = {
+        "name": "New User",
+        "email": "new@user.com",
+        "course": "Python"
+    }
+
+    response = client.post(
+        "/add",
+        data=data,
+        follow_redirects=True
+    )
+
     assert response.status_code == 200
     assert b"New User" in response.data
 
 
 def test_update_student(client):
-    """Test updating a student"""
-    student_id = "66fddff25f4b5f6a0a123456"
-    data = {"name": "Updated Name", "email": "updated@student.com", "course": "Updated Course"}
-    response = client.post(f'/update/{student_id}', data=data, follow_redirects=True)
+    """Test updating a student."""
+
+    with app.app_context():
+        student = mongo.db.students.insert_one({
+            "name": "Old Name",
+            "email": "old@student.com",
+            "course": "Old Course"
+        })
+
+        student_id = str(student.inserted_id)
+
+    data = {
+        "name": "Updated Name",
+        "email": "updated@student.com",
+        "course": "Updated Course"
+    }
+
+    response = client.post(
+        f"/update/{student_id}",
+        data=data,
+        follow_redirects=True
+    )
+
     assert response.status_code == 200
     assert b"Updated Name" in response.data
 
 
 def test_delete_student(client):
-    """Test deleting a student"""
-    # Add a temporary student
+    """Test deleting a student."""
+
     with app.app_context():
-        student_id = mongo.db.students.insert_one({
+        student = mongo.db.students.insert_one({
             "name": "Temp User",
             "email": "temp@user.com",
             "course": "Temp Course"
-        }).inserted_id
+        })
 
-    response = client.get(f'/delete/{student_id}', follow_redirects=True)
+        student_id = str(student.inserted_id)
+
+    response = client.get(
+        f"/delete/{student_id}",
+        follow_redirects=True
+    )
+
     assert response.status_code == 200
     assert b"Temp User" not in response.data
+
+
+def test_invalid_route(client):
+    """Invalid routes should return HTTP 404."""
+    response = client.get("/this-route-does-not-exist")
+
+    assert response.status_code == 404
