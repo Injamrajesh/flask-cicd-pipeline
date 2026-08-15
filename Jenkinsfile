@@ -20,16 +20,14 @@ pipeline {
         }
 
         // ==========================================
-        // 2. Install Python Dependencies
+        // 2. Install Dependencies
         // ==========================================
         stage('Install Dependencies') {
             steps {
                 sh '''
                     set -e
 
-                    echo "======================================"
-                    echo "Installing Python Dependencies"
-                    echo "======================================"
+                    echo "Installing Python dependencies..."
 
                     python3 -m pip install \
                         --break-system-packages \
@@ -45,34 +43,30 @@ pipeline {
         // ==========================================
         stage('Run Tests') {
             steps {
+
                 withCredentials([
                     string(
                         credentialsId: 'MONGO_URI_RI',
                         variable: 'MONGO_URI'
                     )
                 ]) {
+
                     sh '''
                         set -e
 
                         echo "======================================"
-                        echo "Checking MongoDB Credential"
+                        echo "Running Application Tests"
                         echo "======================================"
 
                         if [ -z "$MONGO_URI" ]; then
-                            echo "ERROR: MONGO_URI is empty"
+                            echo "ERROR: MONGO_URI credential is empty."
                             exit 1
                         fi
-
-                        echo "MongoDB credential is available."
-
-                        echo "======================================"
-                        echo "Running Pytest"
-                        echo "======================================"
 
                         python3 -m pytest -v
 
                         echo "======================================"
-                        echo "All tests passed successfully."
+                        echo "Tests completed successfully."
                         echo "======================================"
                     '''
                 }
@@ -84,6 +78,7 @@ pipeline {
         // ==========================================
         stage('Build Docker Image') {
             steps {
+
                 sh '''
                     set -e
 
@@ -92,26 +87,27 @@ pipeline {
                     echo "======================================"
 
                     docker build \
-                        -t "$ECR_REPO:$IMAGE_TAG" .
+                        -t "$ECR_REPO:$IMAGE_TAG" \
+                        .
 
                     echo "Docker image built successfully."
-
-                    docker images | grep flask-practice || true
                 '''
             }
         }
 
         // ==========================================
-        // 5. Push Docker Image to ECR
+        // 5. Push Image to Amazon ECR
         // ==========================================
         stage('Push Image to ECR') {
             steps {
+
                 withCredentials([
                     [
                         $class: 'AmazonWebServicesCredentialsBinding',
                         credentialsId: 'aws-ecr-credentials'
                     ]
                 ]) {
+
                     sh '''
                         set -e
 
@@ -131,8 +127,6 @@ pipeline {
                             --username AWS \
                             --password-stdin "$ECR_REGISTRY"
 
-                        echo "ECR login successful."
-
                         echo "======================================"
                         echo "Pushing Docker Image"
                         echo "======================================"
@@ -146,23 +140,26 @@ pipeline {
         }
 
         // ==========================================
-        // 6. Test SSH Connection to EC2
+        // 6. Test SSH Connection
         // ==========================================
         stage('Test EC2 SSH') {
             steps {
+
                 sshagent(['flask-practice-ec2-ssh']) {
+
                     sh '''
                         set -e
 
                         echo "======================================"
-                        echo "Testing SSH Connection to EC2"
+                        echo "Testing SSH Connection"
                         echo "======================================"
 
-                        ssh -o StrictHostKeyChecking=no \
+                        ssh \
+                            -o StrictHostKeyChecking=no \
                             ec2-user@98.89.45.250 \
                             "echo SSH connection successful && hostname"
 
-                        echo "SSH connection test completed successfully."
+                        echo "SSH connection successful."
                     '''
                 }
             }
@@ -173,6 +170,7 @@ pipeline {
         // ==========================================
         stage('Deploy to EC2') {
             steps {
+
                 withCredentials([
                     string(
                         credentialsId: 'MONGO_URI_RI',
@@ -193,74 +191,117 @@ pipeline {
                             echo "Starting EC2 Deployment"
                             echo "======================================"
 
-                            ssh -o StrictHostKeyChecking=no \
+                            ssh \
+                                -o StrictHostKeyChecking=no \
                                 ec2-user@98.89.45.250 \
-                                "
-                                set -e
+                                "AWS_REGION='$AWS_REGION' \
+                                 ECR_REGISTRY='$ECR_REGISTRY' \
+                                 ECR_REPO='$ECR_REPO' \
+                                 IMAGE_TAG='$IMAGE_TAG' \
+                                 MONGO_URI='$MONGO_URI' \
+                                 SECRET_KEY='$SECRET_KEY' \
+                                 bash -s" <<'REMOTE_SCRIPT'
 
-                                echo '======================================'
-                                echo 'Logging in to Amazon ECR'
-                                echo '======================================'
+set -e
 
-                                aws ecr get-login-password \
-                                    --region us-east-1 | \
-                                    docker login \
-                                    --username AWS \
-                                    --password-stdin \
-                                    310297108115.dkr.ecr.us-east-1.amazonaws.com
+echo "======================================"
+echo "Connected to EC2"
+echo "======================================"
 
-                                echo 'ECR login successful.'
+echo "Logging in to Amazon ECR..."
 
-                                echo '======================================'
-                                echo 'Pulling New Docker Image'
-                                echo '======================================'
+aws ecr get-login-password \
+    --region "$AWS_REGION" | \
+    docker login \
+    --username AWS \
+    --password-stdin "$ECR_REGISTRY"
 
-                                docker pull \
-                                    310297108115.dkr.ecr.us-east-1.amazonaws.com/flask-practice:${IMAGE_TAG}
+echo "ECR login successful."
 
-                                echo '======================================'
-                                echo 'Stopping Existing Container'
-                                echo '======================================'
+echo "======================================"
+echo "Pulling New Docker Image"
+echo "======================================"
 
-                                docker stop flask-practice || true
+docker pull "$ECR_REPO:$IMAGE_TAG"
 
-                                echo '======================================'
-                                echo 'Removing Existing Container'
-                                echo '======================================'
+echo "Docker image pulled successfully."
 
-                                docker rm flask-practice || true
+echo "======================================"
+echo "Stopping Existing Container"
+echo "======================================"
 
-                                echo '======================================'
-                                echo 'Starting New Container'
-                                echo '======================================'
+docker stop flask-practice || true
 
-                                docker run -d \
-                                    --name flask-practice \
-                                    -p 5000:5000 \
-                                    -e MONGO_URI='${MONGO_URI}' \
-                                    -e SECRET_KEY='${SECRET_KEY}' \
-                                    310297108115.dkr.ecr.us-east-1.amazonaws.com/flask-practice:${IMAGE_TAG}
+echo "Removing Existing Container..."
 
-                                echo '======================================'
-                                echo 'Deployment Completed'
-                                echo '======================================'
+docker rm flask-practice || true
 
-                                echo 'Running Containers:'
+echo "======================================"
+echo "Starting New Container"
+echo "======================================"
 
-                                docker ps
+docker run -d \
+    --name flask-practice \
+    -p 5000:5000 \
+    -e "MONGO_URI=$MONGO_URI" \
+    -e "SECRET_KEY=$SECRET_KEY" \
+    "$ECR_REPO:$IMAGE_TAG"
 
-                                echo '======================================'
-                                echo 'Application Logs'
-                                echo '======================================'
+echo "======================================"
+echo "Container Started"
+echo "======================================"
 
-                                docker logs --tail 20 flask-practice || true
-                                "
+docker ps
+
+echo "======================================"
+echo "Deployment Completed Successfully"
+echo "======================================"
+
+REMOTE_SCRIPT
 
                             echo "======================================"
                             echo "EC2 Deployment Finished"
                             echo "======================================"
                         '''
                     }
+                }
+            }
+        }
+
+        // ==========================================
+        // 8. Verify Application
+        // ==========================================
+        stage('Verify Application') {
+            steps {
+
+                sshagent(['flask-practice-ec2-ssh']) {
+
+                    sh '''
+                        set -e
+
+                        echo "======================================"
+                        echo "Verifying Docker Container"
+                        echo "======================================"
+
+                        ssh \
+                            -o StrictHostKeyChecking=no \
+                            ec2-user@98.89.45.250 \
+                            "docker ps --filter name=flask-practice"
+
+                        echo "======================================"
+                        echo "Checking Application"
+                        echo "======================================"
+
+                        ssh \
+                            -o StrictHostKeyChecking=no \
+                            ec2-user@98.89.45.250 \
+                            "curl -f http://localhost:5000"
+
+                        echo ""
+                        echo "======================================"
+                        echo "Application Verification Successful"
+                        echo "======================================"
+                    '''
                 }
             }
         }
@@ -273,17 +314,20 @@ pipeline {
 
         success {
             echo '''
-======================================
+==========================================
 CI/CD PIPELINE COMPLETED SUCCESSFULLY!
-======================================
+==========================================
+Application built, pushed to ECR,
+deployed to EC2 and verified.
 '''
         }
 
         failure {
             echo '''
-======================================
+==========================================
 CI/CD PIPELINE FAILED!
-======================================
+==========================================
+Check the failed stage in the console log.
 '''
         }
     }
