@@ -10,11 +10,12 @@ load_dotenv()
 
 app = Flask(__name__)
 
-# Application configuration
-app.config["MONGO_URI"] = os.getenv(
-    "MONGO_URI",
-    "mongodb://localhost:27017/flask_practice"
-)
+mongo_uri = os.environ.get("MONGO_URI")
+
+if not mongo_uri:
+    mongo_uri = "mongodb://localhost:27017/flask_practice"
+
+app.config["MONGO_URI"] = mongo_uri
 app.secret_key = os.getenv("SECRET_KEY", "dev-secret-key")
 
 # Initialize MongoDB
