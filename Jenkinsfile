@@ -25,7 +25,6 @@ pipeline {
             steps {
                 withCredentials([string(credentialsId: 'MONGO_URI_RI', variable: 'MONGO_URI')]) {
                     sh '''
-                         export MONGO_URI="$MONGO_URI"
                         python3 -m pytest -v
                     '''
                 }
