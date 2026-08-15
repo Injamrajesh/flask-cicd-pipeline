@@ -1,4 +1,3 @@
-```groovy
 pipeline {
     agent any
 
@@ -11,18 +10,12 @@ pipeline {
 
     stages {
 
-        // ==========================================
-        // 1. Checkout Source Code
-        // ==========================================
         stage('Checkout') {
             steps {
                 checkout scm
             }
         }
 
-        // ==========================================
-        // 2. Install Dependencies
-        // ==========================================
         stage('Install Dependencies') {
             steps {
                 sh '''
@@ -41,19 +34,14 @@ pipeline {
             }
         }
 
-        // ==========================================
-        // 3. Run Tests
-        // ==========================================
         stage('Run Tests') {
             steps {
-
                 withCredentials([
                     string(
                         credentialsId: 'MONGO_URI_RI',
                         variable: 'MONGO_URI'
                     )
                 ]) {
-
                     sh '''
                         set -e
 
@@ -82,12 +70,8 @@ pipeline {
             }
         }
 
-        // ==========================================
-        // 4. Build Docker Image
-        // ==========================================
         stage('Build Docker Image') {
             steps {
-
                 sh '''
                     set -e
 
@@ -112,19 +96,14 @@ pipeline {
             }
         }
 
-        // ==========================================
-        // 5. Push Image to Amazon ECR
-        // ==========================================
         stage('Push Image to ECR') {
             steps {
-
                 withCredentials([
                     [
                         $class: 'AmazonWebServicesCredentialsBinding',
                         credentialsId: 'aws-ecr-credentials'
                     ]
                 ]) {
-
                     sh '''
                         set -e
 
@@ -162,14 +141,9 @@ pipeline {
             }
         }
 
-        // ==========================================
-        // 6. Test EC2 SSH Connection
-        // ==========================================
         stage('Test EC2 SSH') {
             steps {
-
                 sshagent(['flask-practice-ec2-ssh']) {
-
                     sh '''
                         set -e
 
@@ -188,12 +162,8 @@ pipeline {
             }
         }
 
-        // ==========================================
-        // 7. Deploy to EC2
-        // ==========================================
         stage('Deploy to EC2') {
             steps {
-
                 withCredentials([
                     string(
                         credentialsId: 'MONGO_URI_RI',
@@ -204,9 +174,7 @@ pipeline {
                         variable: 'SECRET_KEY'
                     )
                 ]) {
-
                     sshagent(['flask-practice-ec2-ssh']) {
-
                         sh '''
                             set -e
 
@@ -295,14 +263,9 @@ REMOTE_SCRIPT
             }
         }
 
-        // ==========================================
-        // 8. Verify Application
-        // ==========================================
         stage('Verify Application') {
             steps {
-
                 sshagent(['flask-practice-ec2-ssh']) {
-
                     sh '''
                         set -e
 
@@ -334,9 +297,6 @@ REMOTE_SCRIPT
         }
     }
 
-    // ==========================================
-    // Pipeline Result + Email Notification
-    // ==========================================
     post {
 
         success {
@@ -411,4 +371,4 @@ Jenkins
         }
     }
 }
-```
+
