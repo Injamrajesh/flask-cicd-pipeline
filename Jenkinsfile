@@ -27,7 +27,9 @@ pipeline {
                 sh '''
                     set -e
 
-                    echo "Installing Python dependencies..."
+                    echo "======================================"
+                    echo "Installing Python Dependencies"
+                    echo "======================================"
 
                     python3 -m pip install \
                         --break-system-packages \
@@ -55,7 +57,7 @@ pipeline {
                         set -e
 
                         echo "======================================"
-                        echo "Running Application Tests"
+                        echo "Checking MongoDB Credential"
                         echo "======================================"
 
                         if [ -z "$MONGO_URI" ]; then
@@ -63,10 +65,16 @@ pipeline {
                             exit 1
                         fi
 
+                        echo "MongoDB credential is available."
+
+                        echo "======================================"
+                        echo "Running Pytest"
+                        echo "======================================"
+
                         python3 -m pytest -v
 
                         echo "======================================"
-                        echo "Tests completed successfully."
+                        echo "All tests passed successfully."
                         echo "======================================"
                     '''
                 }
@@ -86,11 +94,19 @@ pipeline {
                     echo "Building Docker Image"
                     echo "======================================"
 
+                    echo "Image Tag: $IMAGE_TAG"
+
                     docker build \
                         -t "$ECR_REPO:$IMAGE_TAG" \
                         .
 
                     echo "Docker image built successfully."
+
+                    echo "======================================"
+                    echo "Docker Image Details"
+                    echo "======================================"
+
+                    docker images | grep flask-practice
                 '''
             }
         }
@@ -127,20 +143,26 @@ pipeline {
                             --username AWS \
                             --password-stdin "$ECR_REGISTRY"
 
+                        echo "ECR login successful."
+
                         echo "======================================"
                         echo "Pushing Docker Image"
                         echo "======================================"
 
                         docker push "$ECR_REPO:$IMAGE_TAG"
 
-                        echo "Docker image pushed successfully."
+                        echo "======================================"
+                        echo "Docker Image Pushed Successfully"
+                        echo "======================================"
+
+                        echo "Image: $ECR_REPO:$IMAGE_TAG"
                     '''
                 }
             }
         }
 
         // ==========================================
-        // 6. Test SSH Connection
+        // 6. Test EC2 SSH Connection
         // ==========================================
         stage('Test EC2 SSH') {
             steps {
@@ -151,7 +173,7 @@ pipeline {
                         set -e
 
                         echo "======================================"
-                        echo "Testing SSH Connection"
+                        echo "Testing SSH Connection to EC2"
                         echo "======================================"
 
                         ssh \
@@ -159,7 +181,7 @@ pipeline {
                             ec2-user@98.89.45.250 \
                             "echo SSH connection successful && hostname"
 
-                        echo "SSH connection successful."
+                        echo "SSH connection test completed successfully."
                     '''
                 }
             }
@@ -208,7 +230,9 @@ echo "======================================"
 echo "Connected to EC2"
 echo "======================================"
 
-echo "Logging in to Amazon ECR..."
+echo "======================================"
+echo "Logging in to Amazon ECR"
+echo "======================================"
 
 aws ecr get-login-password \
     --region "$AWS_REGION" | \
@@ -232,7 +256,9 @@ echo "======================================"
 
 docker stop flask-practice || true
 
-echo "Removing Existing Container..."
+echo "======================================"
+echo "Removing Existing Container"
+echo "======================================"
 
 docker rm flask-practice || true
 
@@ -254,7 +280,7 @@ echo "======================================"
 docker ps
 
 echo "======================================"
-echo "Deployment Completed Successfully"
+echo "Deployment Completed"
 echo "======================================"
 
 REMOTE_SCRIPT
@@ -289,13 +315,13 @@ REMOTE_SCRIPT
                             "docker ps --filter name=flask-practice"
 
                         echo "======================================"
-                        echo "Checking Application"
+                        echo "Checking Flask Health Endpoint"
                         echo "======================================"
 
                         ssh \
                             -o StrictHostKeyChecking=no \
                             ec2-user@98.89.45.250 \
-                            "curl -f http://localhost:5000"
+                            "curl -f http://localhost:5000/health"
 
                         echo ""
                         echo "======================================"
@@ -318,7 +344,8 @@ REMOTE_SCRIPT
 CI/CD PIPELINE COMPLETED SUCCESSFULLY!
 ==========================================
 Application built, pushed to ECR,
-deployed to EC2 and verified.
+deployed to EC2 and verified using /health.
+==========================================
 '''
         }
 
@@ -328,6 +355,7 @@ deployed to EC2 and verified.
 CI/CD PIPELINE FAILED!
 ==========================================
 Check the failed stage in the console log.
+==========================================
 '''
         }
     }
