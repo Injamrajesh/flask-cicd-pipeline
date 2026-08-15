@@ -2,37 +2,47 @@ pipeline {
     agent any
 
     environment {
-        AWS_REGION  = 'us-east-1'
+        AWS_REGION = 'us-east-1'
         ECR_REGISTRY = '310297108115.dkr.ecr.us-east-1.amazonaws.com'
-        ECR_REPO     = '310297108115.dkr.ecr.us-east-1.amazonaws.com/flask-practice'
-        IMAGE_TAG    = "${env.GIT_COMMIT}"
+        ECR_REPO = '310297108115.dkr.ecr.us-east-1.amazonaws.com/flask-practice'
+        IMAGE_TAG = "${env.GIT_COMMIT}"
     }
 
     stages {
 
-        // ==================================================
+        // ==========================================
         // 1. Checkout Source Code
-        // ==================================================
+        // ==========================================
         stage('Checkout') {
             steps {
                 checkout scm
             }
         }
 
-        // ==================================================
+        // ==========================================
         // 2. Install Python Dependencies
-        // ==================================================
+        // ==========================================
         stage('Install Dependencies') {
             steps {
                 sh '''
-                    python3 -m pip install --break-system-packages -r requirements.txt
+                    set -e
+
+                    echo "======================================"
+                    echo "Installing Python Dependencies"
+                    echo "======================================"
+
+                    python3 -m pip install \
+                        --break-system-packages \
+                        -r requirements.txt
+
+                    echo "Dependencies installed successfully."
                 '''
             }
         }
 
-        // ==================================================
+        // ==========================================
         // 3. Run Tests
-        // ==================================================
+        // ==========================================
         stage('Run Tests') {
             steps {
                 withCredentials([
@@ -45,7 +55,7 @@ pipeline {
                         set -e
 
                         echo "======================================"
-                        echo "Checking MongoDB credential..."
+                        echo "Checking MongoDB Credential"
                         echo "======================================"
 
                         if [ -z "$MONGO_URI" ]; then
@@ -53,19 +63,25 @@ pipeline {
                             exit 1
                         fi
 
-                        echo "MongoDB credential is available.'
+                        echo "MongoDB credential is available."
 
-                        
+                        echo "======================================"
+                        echo "Running Pytest"
+                        echo "======================================"
 
                         python3 -m pytest -v
+
+                        echo "======================================"
+                        echo "All tests passed successfully."
+                        echo "======================================"
                     '''
                 }
             }
         }
 
-        // ==================================================
+        // ==========================================
         // 4. Build Docker Image
-        // ==================================================
+        // ==========================================
         stage('Build Docker Image') {
             steps {
                 sh '''
@@ -75,16 +91,19 @@ pipeline {
                     echo "Building Docker Image"
                     echo "======================================"
 
-                    docker build -t "$ECR_REPO:$IMAGE_TAG" .
+                    docker build \
+                        -t "$ECR_REPO:$IMAGE_TAG" .
 
                     echo "Docker image built successfully."
+
+                    docker images | grep flask-practice || true
                 '''
             }
         }
 
-        // ==================================================
+        // ==========================================
         // 5. Push Docker Image to ECR
-        // ==================================================
+        // ==========================================
         stage('Push Image to ECR') {
             steps {
                 withCredentials([
@@ -112,6 +131,8 @@ pipeline {
                             --username AWS \
                             --password-stdin "$ECR_REGISTRY"
 
+                        echo "ECR login successful."
+
                         echo "======================================"
                         echo "Pushing Docker Image"
                         echo "======================================"
@@ -124,9 +145,9 @@ pipeline {
             }
         }
 
-        // ==================================================
+        // ==========================================
         // 6. Test SSH Connection to EC2
-        // ==================================================
+        // ==========================================
         stage('Test EC2 SSH') {
             steps {
                 sshagent(['flask-practice-ec2-ssh']) {
@@ -141,18 +162,17 @@ pipeline {
                             ec2-user@98.89.45.250 \
                             "echo SSH connection successful && hostname"
 
-                        echo "SSH test completed successfully."
+                        echo "SSH connection test completed successfully."
                     '''
                 }
             }
         }
 
-        // ==================================================
-        // 7. Deploy Docker Image to EC2
-        // ==================================================
+        // ==========================================
+        // 7. Deploy to EC2
+        // ==========================================
         stage('Deploy to EC2') {
             steps {
-
                 withCredentials([
                     string(
                         credentialsId: 'MONGO_URI_RI',
@@ -174,45 +194,66 @@ pipeline {
                             echo "======================================"
 
                             ssh -o StrictHostKeyChecking=no \
-                                ec2-user@98.89.45.250 "
-                                    set -e
+                                ec2-user@98.89.45.250 \
+                                "
+                                set -e
 
-                                    echo 'Logging in to Amazon ECR...'
+                                echo '======================================'
+                                echo 'Logging in to Amazon ECR'
+                                echo '======================================'
 
-                                    aws ecr get-login-password \
-                                        --region us-east-1 | \
-                                        docker login \
-                                        --username AWS \
-                                        --password-stdin \
-                                        310297108115.dkr.ecr.us-east-1.amazonaws.com
+                                aws ecr get-login-password \
+                                    --region us-east-1 | \
+                                    docker login \
+                                    --username AWS \
+                                    --password-stdin \
+                                    310297108115.dkr.ecr.us-east-1.amazonaws.com
 
-                                    echo 'Pulling new Docker image...'
+                                echo 'ECR login successful.'
 
-                                    docker pull \
-                                        310297108115.dkr.ecr.us-east-1.amazonaws.com/flask-practice:${IMAGE_TAG}
+                                echo '======================================'
+                                echo 'Pulling New Docker Image'
+                                echo '======================================'
 
-                                    echo 'Stopping old container...'
+                                docker pull \
+                                    310297108115.dkr.ecr.us-east-1.amazonaws.com/flask-practice:${IMAGE_TAG}
 
-                                    docker stop flask-practice || true
+                                echo '======================================'
+                                echo 'Stopping Existing Container'
+                                echo '======================================'
 
-                                    echo 'Removing old container...'
+                                docker stop flask-practice || true
 
-                                    docker rm flask-practice || true
+                                echo '======================================'
+                                echo 'Removing Existing Container'
+                                echo '======================================'
 
-                                    echo 'Starting new container...'
+                                docker rm flask-practice || true
 
-                                    docker run -d \
-                                        --name flask-practice \
-                                        -p 5000:5000 \
-                                        -e MONGO_URI='${MONGO_URI}' \
-                                        -e SECRET_KEY='${SECRET_KEY}' \
-                                        310297108115.dkr.ecr.us-east-1.amazonaws.com/flask-practice:${IMAGE_TAG}
+                                echo '======================================'
+                                echo 'Starting New Container'
+                                echo '======================================'
 
-                                    echo 'Deployment completed successfully.'
+                                docker run -d \
+                                    --name flask-practice \
+                                    -p 5000:5000 \
+                                    -e MONGO_URI='${MONGO_URI}' \
+                                    -e SECRET_KEY='${SECRET_KEY}' \
+                                    310297108115.dkr.ecr.us-east-1.amazonaws.com/flask-practice:${IMAGE_TAG}
 
-                                    echo 'Running containers:'
+                                echo '======================================'
+                                echo 'Deployment Completed'
+                                echo '======================================'
 
-                                    docker ps
+                                echo 'Running Containers:'
+
+                                docker ps
+
+                                echo '======================================'
+                                echo 'Application Logs'
+                                echo '======================================'
+
+                                docker logs --tail 20 flask-practice || true
                                 "
 
                             echo "======================================"
@@ -225,21 +266,25 @@ pipeline {
         }
     }
 
-    // ==================================================
+    // ==========================================
     // Pipeline Result
-    // ==================================================
+    // ==========================================
     post {
 
         success {
-            echo '======================================'
-            echo 'CI/CD PIPELINE COMPLETED SUCCESSFULLY!'
-            echo '======================================'
+            echo '''
+======================================
+CI/CD PIPELINE COMPLETED SUCCESSFULLY!
+======================================
+'''
         }
 
         failure {
-            echo '======================================'
-            echo 'CI/CD PIPELINE FAILED!'
-            echo '======================================'
+            echo '''
+======================================
+CI/CD PIPELINE FAILED!
+======================================
+'''
         }
     }
 }
