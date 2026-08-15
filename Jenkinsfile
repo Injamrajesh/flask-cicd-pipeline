@@ -1,3 +1,4 @@
+```groovy
 pipeline {
     agent any
 
@@ -334,11 +335,12 @@ REMOTE_SCRIPT
     }
 
     // ==========================================
-    // Pipeline Result
+    // Pipeline Result + Email Notification
     // ==========================================
     post {
 
         success {
+
             echo '''
 ==========================================
 CI/CD PIPELINE COMPLETED SUCCESSFULLY!
@@ -347,9 +349,36 @@ Application built, pushed to ECR,
 deployed to EC2 and verified using /health.
 ==========================================
 '''
+
+            emailext(
+                subject: "SUCCESS: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                body: """
+Hello,
+
+The Jenkins CI/CD pipeline completed successfully.
+
+Job Name: ${env.JOB_NAME}
+Build Number: ${env.BUILD_NUMBER}
+Build Status: ${currentBuild.currentResult}
+
+Application:
+- Docker image built
+- Docker image pushed to Amazon ECR
+- Application deployed to EC2
+- Health check completed successfully
+
+Build URL:
+${env.BUILD_URL}
+
+Regards,
+Jenkins
+""",
+                to: "injamrajesh85@gmail.com"
+            )
         }
 
         failure {
+
             echo '''
 ==========================================
 CI/CD PIPELINE FAILED!
@@ -357,6 +386,29 @@ CI/CD PIPELINE FAILED!
 Check the failed stage in the console log.
 ==========================================
 '''
+
+            emailext(
+                subject: "FAILED: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                body: """
+Hello,
+
+The Jenkins CI/CD pipeline has failed.
+
+Job Name: ${env.JOB_NAME}
+Build Number: ${env.BUILD_NUMBER}
+Build Status: ${currentBuild.currentResult}
+
+Please check the Jenkins console output for the failed stage.
+
+Build URL:
+${env.BUILD_URL}
+
+Regards,
+Jenkins
+""",
+                to: "injamrajesh85@gmail.com"
+            )
         }
     }
 }
+```
