@@ -53,9 +53,9 @@ pipeline {
                             exit 1
                         fi
 
-                        echo "$MONGO_URI" | sed 's#://.*@#://***:***@'
+                        echo "MongoDB credential is available.'
 
-                        echo "Running tests..."
+                        
 
                         python3 -m pytest -v
                     '''
