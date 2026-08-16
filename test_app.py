@@ -23,7 +23,7 @@ def test_health(client):
     """Health endpoint should return HTTP 200."""
     response = client.get("/health")
     assert response.status_code == 200
-    assert response.json["status"] == "healthy"
+    assert response.json["status"] == "FAILED_TEST"
 
 
 def test_home_page(client):
