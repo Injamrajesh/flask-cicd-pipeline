@@ -28,7 +28,6 @@ pipeline {
             }
         }
 
-
         stage('Install Dependencies') {
             steps {
                 script {
@@ -50,7 +49,6 @@ pipeline {
                 '''
             }
         }
-
 
         stage('Run Tests') {
             steps {
@@ -93,7 +91,6 @@ pipeline {
             }
         }
 
-
         stage('Build Docker Image') {
             steps {
                 script {
@@ -123,7 +120,6 @@ pipeline {
                 '''
             }
         }
-
 
         stage('Push Image to ECR') {
             steps {
@@ -179,7 +175,6 @@ pipeline {
             }
         }
 
-
         stage('Test EC2 SSH') {
             steps {
                 script {
@@ -205,7 +200,6 @@ pipeline {
                 }
             }
         }
-
 
         stage('Deploy to EC2') {
             steps {
@@ -251,75 +245,75 @@ pipeline {
                                 "$MONGO_URI" \
                                 "$SECRET_KEY" <<'REMOTE_SCRIPT'
 
-                            set -e
+set -e
 
-                            AWS_REGION="$1"
-                            ECR_REGISTRY="$2"
-                            ECR_REPO="$3"
-                            IMAGE_TAG="$4"
-                            MONGO_URI="$5"
-                            SECRET_KEY="$6"
+AWS_REGION="$1"
+ECR_REGISTRY="$2"
+ECR_REPO="$3"
+IMAGE_TAG="$4"
+MONGO_URI="$5"
+SECRET_KEY="$6"
 
-                            echo "======================================"
-                            echo "Connected to EC2"
-                            echo "======================================"
+echo "======================================"
+echo "Connected to EC2"
+echo "======================================"
 
-                            echo "======================================"
-                            echo "Logging in to Amazon ECR"
-                            echo "======================================"
+echo "======================================"
+echo "Logging in to Amazon ECR"
+echo "======================================"
 
-                            aws ecr get-login-password \
-                                --region "$AWS_REGION" |
-                            docker login \
-                                --username AWS \
-                                --password-stdin "$ECR_REGISTRY"
+aws ecr get-login-password \
+    --region "$AWS_REGION" |
+docker login \
+    --username AWS \
+    --password-stdin "$ECR_REGISTRY"
 
-                            echo "ECR login successful."
+echo "ECR login successful."
 
-                            echo "======================================"
-                            echo "Pulling New Docker Image"
-                            echo "======================================"
+echo "======================================"
+echo "Pulling New Docker Image"
+echo "======================================"
 
-                            docker pull \
-                                "$ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG"
+docker pull \
+    "$ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG"
 
-                            echo "Docker image pulled successfully."
+echo "Docker image pulled successfully."
 
-                            echo "======================================"
-                            echo "Stopping Existing Container"
-                            echo "======================================"
+echo "======================================"
+echo "Stopping Existing Container"
+echo "======================================"
 
-                            docker stop flask-practice || true
+docker stop flask-practice || true
 
-                            echo "======================================"
-                            echo "Removing Existing Container"
-                            echo "======================================"
+echo "======================================"
+echo "Removing Existing Container"
+echo "======================================"
 
-                            docker rm flask-practice || true
+docker rm flask-practice || true
 
-                            echo "======================================"
-                            echo "Starting New Container"
-                            echo "======================================"
+echo "======================================"
+echo "Starting New Container"
+echo "======================================"
 
-                            docker run -d \
-                                --name flask-practice \
-                                -p 5000:5000 \
-                                -e MONGO_URI="$MONGO_URI" \
-                                -e SECRET_KEY="$SECRET_KEY" \
-                                "$ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG"
+docker run -d \
+    --name flask-practice \
+    -p 5000:5000 \
+    -e MONGO_URI="$MONGO_URI" \
+    -e SECRET_KEY="$SECRET_KEY" \
+    "$ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG"
 
-                            echo "======================================"
-                            echo "Container Started"
-                            echo "======================================"
+echo "======================================"
+echo "Container Started"
+echo "======================================"
 
-                            docker ps \
-                                --filter name=flask-practice
+docker ps \
+    --filter name=flask-practice
 
-                            echo "======================================"
-                            echo "Deployment Completed"
-                            echo "======================================"
+echo "======================================"
+echo "Deployment Completed"
+echo "======================================"
 
-                            REMOTE_SCRIPT
+REMOTE_SCRIPT
 
                             echo "======================================"
                             echo "EC2 Deployment Finished"
@@ -329,7 +323,6 @@ pipeline {
                 }
             }
         }
-
 
         stage('Verify Application') {
             steps {
@@ -370,7 +363,6 @@ pipeline {
             }
         }
     }
-
 
     post {
 
@@ -440,7 +432,6 @@ Jenkins
 """
             )
         }
-
 
         failure {
 
