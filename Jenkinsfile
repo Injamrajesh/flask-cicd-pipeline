@@ -25,8 +25,8 @@ pipeline {
                     echo "Installing Python Dependencies"
                     echo "======================================"
 
-                    python3 -m pip install \
-                        --break-system-packages \
+                    python3 -m pip install \\
+                        --break-system-packages \\
                         -r requirements.txt
 
                     echo "Dependencies installed successfully."
@@ -81,8 +81,8 @@ pipeline {
 
                     echo "Image Tag: $IMAGE_TAG"
 
-                    docker build \
-                        -t "$ECR_REPO:$IMAGE_TAG" \
+                    docker build \\
+                        -t "$ECR_REPO:$IMAGE_TAG" \\
                         .
 
                     echo "Docker image built successfully."
@@ -117,10 +117,10 @@ pipeline {
                         echo "Logging in to Amazon ECR"
                         echo "======================================"
 
-                        aws ecr get-login-password \
-                            --region "$AWS_REGION" | \
-                            docker login \
-                            --username AWS \
+                        aws ecr get-login-password \\
+                            --region "$AWS_REGION" | \\
+                            docker login \\
+                            --username AWS \\
                             --password-stdin "$ECR_REGISTRY"
 
                         echo "ECR login successful."
@@ -151,9 +151,9 @@ pipeline {
                         echo "Testing SSH Connection to EC2"
                         echo "======================================"
 
-                        ssh \
-                            -o StrictHostKeyChecking=no \
-                            ec2-user@98.89.45.250 \
+                        ssh \\
+                            -o StrictHostKeyChecking=no \\
+                            ec2-user@98.89.45.250 \\
                             "echo SSH connection successful && hostname"
 
                         echo "SSH connection test completed successfully."
@@ -182,15 +182,15 @@ pipeline {
                             echo "Starting EC2 Deployment"
                             echo "======================================"
 
-                            ssh \
-                                -o StrictHostKeyChecking=no \
-                                ec2-user@98.89.45.250 \
-                                "AWS_REGION='$AWS_REGION' \
-                                 ECR_REGISTRY='$ECR_REGISTRY' \
-                                 ECR_REPO='$ECR_REPO' \
-                                 IMAGE_TAG='$IMAGE_TAG' \
-                                 MONGO_URI='$MONGO_URI' \
-                                 SECRET_KEY='$SECRET_KEY' \
+                            ssh \\
+                                -o StrictHostKeyChecking=no \\
+                                ec2-user@98.89.45.250 \\
+                                "AWS_REGION='$AWS_REGION' \\
+                                 ECR_REGISTRY='$ECR_REGISTRY' \\
+                                 ECR_REPO='$ECR_REPO' \\
+                                 IMAGE_TAG='$IMAGE_TAG' \\
+                                 MONGO_URI='$MONGO_URI' \\
+                                 SECRET_KEY='$SECRET_KEY' \\
                                  bash -s" <<'REMOTE_SCRIPT'
 
 set -e
@@ -203,10 +203,10 @@ echo "======================================"
 echo "Logging in to Amazon ECR"
 echo "======================================"
 
-aws ecr get-login-password \
-    --region "$AWS_REGION" | \
-    docker login \
-    --username AWS \
+aws ecr get-login-password \\
+    --region "$AWS_REGION" | \\
+    docker login \\
+    --username AWS \\
     --password-stdin "$ECR_REGISTRY"
 
 echo "ECR login successful."
@@ -235,11 +235,11 @@ echo "======================================"
 echo "Starting New Container"
 echo "======================================"
 
-docker run -d \
-    --name flask-practice \
-    -p 5000:5000 \
-    -e "MONGO_URI=$MONGO_URI" \
-    -e "SECRET_KEY=$SECRET_KEY" \
+docker run -d \\
+    --name flask-practice \\
+    -p 5000:5000 \\
+    -e "MONGO_URI=$MONGO_URI" \\
+    -e "SECRET_KEY=$SECRET_KEY" \\
     "$ECR_REPO:$IMAGE_TAG"
 
 echo "======================================"
@@ -273,21 +273,22 @@ REMOTE_SCRIPT
                         echo "Verifying Docker Container"
                         echo "======================================"
 
-                        ssh \
-                            -o StrictHostKeyChecking=no \
-                            ec2-user@98.89.45.250 \
+                        ssh \\
+                            -o StrictHostKeyChecking=no \\
+                            ec2-user@98.89.45.250 \\
                             "docker ps --filter name=flask-practice"
 
                         echo "======================================"
                         echo "Checking Flask Health Endpoint"
                         echo "======================================"
 
-                        ssh \
-                            -o StrictHostKeyChecking=no \
-                            ec2-user@98.89.45.250 \
+                        ssh \\
+                            -o StrictHostKeyChecking=no \\
+                            ec2-user@98.89.45.250 \\
                             "curl -f http://localhost:5000/health"
 
                         echo ""
+
                         echo "======================================"
                         echo "Application Verification Successful"
                         echo "======================================"
@@ -317,18 +318,51 @@ Hello,
 
 The Jenkins CI/CD pipeline completed successfully.
 
-Job Name: ${env.JOB_NAME}
-Build Number: ${env.BUILD_NUMBER}
-Build Status: ${currentBuild.currentResult}
+==============================
+BUILD DETAILS
+==============================
+Job Name     : ${env.JOB_NAME}
+Build Number : ${env.BUILD_NUMBER}
+Build Status : ${currentBuild.currentResult}
+Branch       : ${env.GIT_BRANCH}
+Commit SHA   : ${env.GIT_COMMIT}
 
-Application:
-- Docker image built
-- Docker image pushed to Amazon ECR
-- Application deployed to EC2
-- Health check completed successfully
+==============================
+DOCKER / ECR
+==============================
+ECR Repository:
+${env.ECR_REPO}
 
+Docker Image Tag:
+${env.IMAGE_TAG}
+
+Docker Image:
+${env.ECR_REPO}:${env.IMAGE_TAG}
+
+==============================
+EC2 DEPLOYMENT
+==============================
+EC2 Host     : 98.89.45.250
+Container    : flask-practice
+Port         : 5000
+Health Check : PASSED
+Endpoint     : /health
+
+==============================
+DEPLOYMENT RESULT
+==============================
+Docker image built successfully.
+Docker image pushed to Amazon ECR.
+Docker container deployed to EC2.
+Application health check passed.
+
+==============================
+PIPELINE RUN
+==============================
 Build URL:
 ${env.BUILD_URL}
+
+The deployment was successfully completed and verified.
 
 Regards,
 Jenkins
@@ -352,16 +386,47 @@ Check the failed stage in the console log.
                 body: """
 Hello,
 
-The Jenkins CI/CD pipeline has failed.
+The Jenkins CI/CD pipeline has FAILED.
 
-Job Name: ${env.JOB_NAME}
-Build Number: ${env.BUILD_NUMBER}
-Build Status: ${currentBuild.currentResult}
+==============================
+BUILD DETAILS
+==============================
+Job Name     : ${env.JOB_NAME}
+Build Number : ${env.BUILD_NUMBER}
+Build Status : ${currentBuild.currentResult}
+Branch       : ${env.GIT_BRANCH}
+Commit SHA   : ${env.GIT_COMMIT}
 
-Please check the Jenkins console output for the failed stage.
+==============================
+DOCKER / ECR
+==============================
+ECR Repository:
+${env.ECR_REPO}
 
+Docker Image Tag:
+${env.IMAGE_TAG}
+
+==============================
+FAILURE INFORMATION
+==============================
+Failed Stage:
+Please check the pipeline console output for the stage
+that reported the error.
+
+The pipeline is configured to stop when a stage fails,
+so subsequent stages will not be executed.
+
+==============================
+PIPELINE LOG
+==============================
 Build URL:
 ${env.BUILD_URL}
+
+Console Log:
+${env.BUILD_URL}console
+
+Please investigate the failed stage using the Jenkins
+console output.
 
 Regards,
 Jenkins
@@ -371,4 +436,3 @@ Jenkins
         }
     }
 }
-
