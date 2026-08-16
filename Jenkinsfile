@@ -6,18 +6,27 @@ pipeline {
         ECR_REGISTRY = '310297108115.dkr.ecr.us-east-1.amazonaws.com'
         ECR_REPO = '310297108115.dkr.ecr.us-east-1.amazonaws.com/flask-practice'
         IMAGE_TAG = "${env.GIT_COMMIT}"
+        FAILED_STAGE = 'Unknown'
     }
 
     stages {
 
         stage('Checkout') {
             steps {
+                script {
+                    env.FAILED_STAGE = 'Checkout'
+                }
+
                 checkout scm
             }
         }
 
         stage('Install Dependencies') {
             steps {
+                script {
+                    env.FAILED_STAGE = 'Install Dependencies'
+                }
+
                 sh '''
                     set -e
 
@@ -25,8 +34,8 @@ pipeline {
                     echo "Installing Python Dependencies"
                     echo "======================================"
 
-                    python3 -m pip install \\
-                        --break-system-packages \\
+                    python3 -m pip install \
+                        --break-system-packages \
                         -r requirements.txt
 
                     echo "Dependencies installed successfully."
@@ -36,6 +45,10 @@ pipeline {
 
         stage('Run Tests') {
             steps {
+                script {
+                    env.FAILED_STAGE = 'Test'
+                }
+
                 withCredentials([
                     string(
                         credentialsId: 'MONGO_URI_RI',
@@ -72,6 +85,10 @@ pipeline {
 
         stage('Build Docker Image') {
             steps {
+                script {
+                    env.FAILED_STAGE = 'Build'
+                }
+
                 sh '''
                     set -e
 
@@ -81,8 +98,8 @@ pipeline {
 
                     echo "Image Tag: $IMAGE_TAG"
 
-                    docker build \\
-                        -t "$ECR_REPO:$IMAGE_TAG" \\
+                    docker build \
+                        -t "$ECR_REPO:$IMAGE_TAG" \
                         .
 
                     echo "Docker image built successfully."
@@ -98,6 +115,10 @@ pipeline {
 
         stage('Push Image to ECR') {
             steps {
+                script {
+                    env.FAILED_STAGE = 'Push'
+                }
+
                 withCredentials([
                     [
                         $class: 'AmazonWebServicesCredentialsBinding',
@@ -117,10 +138,10 @@ pipeline {
                         echo "Logging in to Amazon ECR"
                         echo "======================================"
 
-                        aws ecr get-login-password \\
-                            --region "$AWS_REGION" | \\
-                            docker login \\
-                            --username AWS \\
+                        aws ecr get-login-password \
+                            --region "$AWS_REGION" | \
+                            docker login \
+                            --username AWS \
                             --password-stdin "$ECR_REGISTRY"
 
                         echo "ECR login successful."
@@ -143,6 +164,10 @@ pipeline {
 
         stage('Test EC2 SSH') {
             steps {
+                script {
+                    env.FAILED_STAGE = 'EC2 SSH'
+                }
+
                 sshagent(['flask-practice-ec2-ssh']) {
                     sh '''
                         set -e
@@ -151,9 +176,9 @@ pipeline {
                         echo "Testing SSH Connection to EC2"
                         echo "======================================"
 
-                        ssh \\
-                            -o StrictHostKeyChecking=no \\
-                            ec2-user@98.89.45.250 \\
+                        ssh \
+                            -o StrictHostKeyChecking=no \
+                            ec2-user@98.89.45.250 \
                             "echo SSH connection successful && hostname"
 
                         echo "SSH connection test completed successfully."
@@ -164,6 +189,10 @@ pipeline {
 
         stage('Deploy to EC2') {
             steps {
+                script {
+                    env.FAILED_STAGE = 'Deploy'
+                }
+
                 withCredentials([
                     string(
                         credentialsId: 'MONGO_URI_RI',
@@ -182,15 +211,15 @@ pipeline {
                             echo "Starting EC2 Deployment"
                             echo "======================================"
 
-                            ssh \\
-                                -o StrictHostKeyChecking=no \\
-                                ec2-user@98.89.45.250 \\
-                                "AWS_REGION='$AWS_REGION' \\
-                                 ECR_REGISTRY='$ECR_REGISTRY' \\
-                                 ECR_REPO='$ECR_REPO' \\
-                                 IMAGE_TAG='$IMAGE_TAG' \\
-                                 MONGO_URI='$MONGO_URI' \\
-                                 SECRET_KEY='$SECRET_KEY' \\
+                            ssh \
+                                -o StrictHostKeyChecking=no \
+                                ec2-user@98.89.45.250 \
+                                "AWS_REGION='$AWS_REGION' \
+                                 ECR_REGISTRY='$ECR_REGISTRY' \
+                                 ECR_REPO='$ECR_REPO' \
+                                 IMAGE_TAG='$IMAGE_TAG' \
+                                 MONGO_URI='$MONGO_URI' \
+                                 SECRET_KEY='$SECRET_KEY' \
                                  bash -s" <<'REMOTE_SCRIPT'
 
 set -e
@@ -203,10 +232,10 @@ echo "======================================"
 echo "Logging in to Amazon ECR"
 echo "======================================"
 
-aws ecr get-login-password \\
-    --region "$AWS_REGION" | \\
-    docker login \\
-    --username AWS \\
+aws ecr get-login-password \
+    --region "$AWS_REGION" | \
+    docker login \
+    --username AWS \
     --password-stdin "$ECR_REGISTRY"
 
 echo "ECR login successful."
@@ -235,11 +264,11 @@ echo "======================================"
 echo "Starting New Container"
 echo "======================================"
 
-docker run -d \\
-    --name flask-practice \\
-    -p 5000:5000 \\
-    -e "MONGO_URI=$MONGO_URI" \\
-    -e "SECRET_KEY=$SECRET_KEY" \\
+docker run -d \
+    --name flask-practice \
+    -p 5000:5000 \
+    -e "MONGO_URI=$MONGO_URI" \
+    -e "SECRET_KEY=$SECRET_KEY" \
     "$ECR_REPO:$IMAGE_TAG"
 
 echo "======================================"
@@ -265,6 +294,10 @@ REMOTE_SCRIPT
 
         stage('Verify Application') {
             steps {
+                script {
+                    env.FAILED_STAGE = 'Deploy Verification'
+                }
+
                 sshagent(['flask-practice-ec2-ssh']) {
                     sh '''
                         set -e
@@ -273,18 +306,18 @@ REMOTE_SCRIPT
                         echo "Verifying Docker Container"
                         echo "======================================"
 
-                        ssh \\
-                            -o StrictHostKeyChecking=no \\
-                            ec2-user@98.89.45.250 \\
+                        ssh \
+                            -o StrictHostKeyChecking=no \
+                            ec2-user@98.89.45.250 \
                             "docker ps --filter name=flask-practice"
 
                         echo "======================================"
                         echo "Checking Flask Health Endpoint"
                         echo "======================================"
 
-                        ssh \\
-                            -o StrictHostKeyChecking=no \\
-                            ec2-user@98.89.45.250 \\
+                        ssh \
+                            -o StrictHostKeyChecking=no \
+                            ec2-user@98.89.45.250 \
                             "curl -f http://localhost:5000/health"
 
                         echo ""
@@ -377,7 +410,7 @@ Jenkins
 ==========================================
 CI/CD PIPELINE FAILED!
 ==========================================
-Check the failed stage in the console log.
+Check the failed stage and console log.
 ==========================================
 '''
 
@@ -398,6 +431,15 @@ Branch       : ${env.GIT_BRANCH}
 Commit SHA   : ${env.GIT_COMMIT}
 
 ==============================
+FAILURE INFORMATION
+==============================
+Failed Stage:
+${env.FAILED_STAGE}
+
+The pipeline stopped after this stage failed.
+Subsequent stages were not executed.
+
+==============================
 DOCKER / ECR
 ==============================
 ECR Repository:
@@ -405,16 +447,6 @@ ${env.ECR_REPO}
 
 Docker Image Tag:
 ${env.IMAGE_TAG}
-
-==============================
-FAILURE INFORMATION
-==============================
-Failed Stage:
-Please check the pipeline console output for the stage
-that reported the error.
-
-The pipeline is configured to stop when a stage fails,
-so subsequent stages will not be executed.
 
 ==============================
 PIPELINE LOG
