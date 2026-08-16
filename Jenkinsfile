@@ -3,6 +3,7 @@ pipeline {
     agent any
 
     environment {
+
         AWS_REGION = 'us-east-1'
 
         AWS_ACCOUNT_ID = '310297108115'
@@ -18,11 +19,19 @@ pipeline {
         CONTAINER_NAME = 'flask-practice'
 
         APP_PORT = '5000'
+
+        FAILED_STAGE = 'Pipeline Initialization'
     }
+
 
     stages {
 
+        // ============================================================
+        // CHECKOUT
+        // ============================================================
+
         stage('Checkout') {
+
             steps {
 
                 script {
@@ -34,7 +43,12 @@ pipeline {
         }
 
 
+        // ============================================================
+        // INSTALL DEPENDENCIES
+        // ============================================================
+
         stage('Install Dependencies') {
+
             steps {
 
                 script {
@@ -58,7 +72,12 @@ pipeline {
         }
 
 
+        // ============================================================
+        // RUN PYTEST
+        // ============================================================
+
         stage('Run Tests') {
+
             steps {
 
                 script {
@@ -101,7 +120,12 @@ pipeline {
         }
 
 
+        // ============================================================
+        // BUILD DOCKER IMAGE
+        // ============================================================
+
         stage('Build Docker Image') {
+
             steps {
 
                 script {
@@ -115,7 +139,8 @@ pipeline {
                     echo "Building Docker Image"
                     echo "======================================"
 
-                    echo "Image Tag: $IMAGE_TAG"
+                    echo "Image:"
+                    echo "$ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG"
 
                     docker build \
                         -t "$ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG" \
@@ -133,7 +158,12 @@ pipeline {
         }
 
 
+        // ============================================================
+        // PUSH IMAGE TO ECR
+        // ============================================================
+
         stage('Push Image to ECR') {
+
             steps {
 
                 script {
@@ -189,7 +219,12 @@ pipeline {
         }
 
 
+        // ============================================================
+        // TEST EC2 SSH
+        // ============================================================
+
         stage('Test EC2 SSH') {
+
             steps {
 
                 script {
@@ -217,7 +252,12 @@ pipeline {
         }
 
 
+        // ============================================================
+        // DEPLOY TO EC2
+        // ============================================================
+
         stage('Deploy to EC2') {
+
             steps {
 
                 script {
@@ -250,6 +290,9 @@ pipeline {
                             echo "Starting EC2 Deployment"
                             echo "======================================"
 
+                            echo "Image:"
+                            echo "$ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG"
+
                             ssh \
                                 -o StrictHostKeyChecking=no \
                                 ec2-user@$EC2_HOST \
@@ -271,6 +314,8 @@ pipeline {
                             MONGO_URI="$5"
                             SECRET_KEY="$6"
 
+                            IMAGE="$ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG"
+
                             echo "======================================"
                             echo "Connected to EC2"
                             echo "======================================"
@@ -291,8 +336,10 @@ pipeline {
                             echo "Pulling New Docker Image"
                             echo "======================================"
 
-                            docker pull \
-                                "$ECR_REPO:$IMAGE_TAG"
+                            echo "Image:"
+                            echo "$IMAGE"
+
+                            docker pull "$IMAGE"
 
                             echo "Docker image pulled successfully."
 
@@ -317,7 +364,7 @@ pipeline {
                                 -p 5000:5000 \
                                 -e MONGO_URI="$MONGO_URI" \
                                 -e SECRET_KEY="$SECRET_KEY" \
-                                "$ECR_REPO:$IMAGE_TAG"
+                                "$IMAGE"
 
                             echo "======================================"
                             echo "Container Started"
@@ -342,7 +389,12 @@ pipeline {
         }
 
 
+        // ============================================================
+        // VERIFY APPLICATION
+        // ============================================================
+
         stage('Verify Application') {
+
             steps {
 
                 script {
@@ -370,10 +422,33 @@ pipeline {
                         ssh \
                             -o StrictHostKeyChecking=no \
                             ec2-user@$EC2_HOST \
-                            "curl -f http://localhost:$APP_PORT/health"
+                            '
+                            for i in {1..10}; do
+
+                                echo "Health check attempt $i..."
+
+                                if curl -f http://localhost:5000/health; then
+                                    echo ""
+                                    echo "Health check PASSED."
+                                    exit 0
+                                fi
+
+                                echo "Application not ready yet."
+                                sleep 5
+
+                            done
+
+                            echo "Health check FAILED."
+                            echo "======================================"
+                            echo "Docker Container Logs"
+                            echo "======================================"
+
+                            docker logs flask-practice || true
+
+                            exit 1
+                            '
 
                         echo ""
-
                         echo "======================================"
                         echo "Application Verification Successful"
                         echo "======================================"
@@ -384,7 +459,15 @@ pipeline {
     }
 
 
+    // ================================================================
+    // POST ACTIONS
+    // ================================================================
+
     post {
+
+        // ============================================================
+        // SUCCESS
+        // ============================================================
 
         success {
 
@@ -430,6 +513,7 @@ EC2 DEPLOYMENT
 EC2 Host     : ${env.EC2_HOST}
 Container    : ${env.CONTAINER_NAME}
 Port         : ${env.APP_PORT}
+
 Health Check : PASSED
 Endpoint     : /health
 
@@ -453,6 +537,10 @@ Jenkins
             )
         }
 
+
+        // ============================================================
+        // FAILURE
+        // ============================================================
 
         failure {
 
@@ -485,10 +573,10 @@ Commit SHA   : ${env.GIT_COMMIT}
 ==============================
 FAILURE INFORMATION
 ==============================
-Last Stage Started:
+Stage in Progress When Failure Occurred:
 ${env.FAILED_STAGE ?: 'Unknown'}
 
-The pipeline stopped because a stage failed.
+The pipeline stopped because this stage failed.
 
 ==============================
 DOCKER / ECR
@@ -496,8 +584,8 @@ DOCKER / ECR
 ECR Repository:
 ${env.ECR_REGISTRY}/${env.ECR_REPO}
 
-Docker Image Tag:
-${env.IMAGE_TAG}
+Docker Image:
+${env.ECR_REGISTRY}/${env.ECR_REPO}:${env.IMAGE_TAG}
 
 ==============================
 PIPELINE LOG
