@@ -186,7 +186,7 @@ pipeline {
                     env.FAILED_STAGE = 'Test EC2 SSH'
                 }
 
-                sshagent(['ec2-user']) {
+                sshagent(['rajesh-ec2-ssh']) {
 
                     sh '''
                         set -e
@@ -230,7 +230,7 @@ pipeline {
                     ]
                 ]) {
 
-                    sshagent(['ec2-user']) {
+                    sshagent(['rajesh-ec2-ssh']) {
 
                         sh '''
                             set -e
@@ -337,7 +337,7 @@ pipeline {
                     env.FAILED_STAGE = 'Verify Application'
                 }
 
-                sshagent(['ec2-user']) {
+                sshagent(['rajesh-ec2-ssh']) {
 
                     sh '''
                         set -e
